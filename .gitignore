@@ -1,8 +1,27 @@
+
 HELP.md
 target/
 .mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
 !**/src/test/**/target/
+
+### Credenciales y configuraciones locales ###
+.env
+.env.*
+!.env.example
+application-local.properties
+application-local.yml
+application-local.yaml
+application-dev.properties
+application-dev.yml
+application-dev.yaml
+
+### Logs ###
+*.log
+logs/
+
+### Java ###
+*.class
 
 ### STS ###
 .apt_generated
@@ -14,7 +33,7 @@ target/
 .sts4-cache
 
 ### IntelliJ IDEA ###
-.idea
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -31,3 +50,8 @@ build/
 
 ### VS Code ###
 .vscode/
+
+### Sistema operativo ###
+.DS_Store
+Thumbs.db
+desktop.ini

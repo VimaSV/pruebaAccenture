@@ -1,0 +1,25 @@
+# Archivos de compilacion y temporales
+target/
+build/
+*.log
+logs/
+
+# Git y configuracion local
+.git/
+.gitignore
+.idea/
+*.iml
+.vscode/
+
+# Secretos: el .env nunca debe entrar en el contexto de build ni en la imagen
+.env
+.env.*
+!.env.example
+
+# Archivos del stack Docker que no se usan en la imagen
+Dockerfile
+docker-compose.yml
+
+# Documentacion y ayudantes locales
+README.md
+.agents/

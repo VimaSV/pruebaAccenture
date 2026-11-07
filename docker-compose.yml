@@ -18,5 +18,19 @@ services:
       timeout: 5s
       retries: 12
 
+  api:
+    build: .
+    container_name: franquicias-api
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DB_URL: r2dbc:mysql://mysql:3306/franquicias_db
+      DB_USERNAME: franquicias_app
+      DB_PASSWORD: ${MYSQL_FRANQUICIAS_APP_PASSWORD:?Define MYSQL_FRANQUICIAS_APP_PASSWORD en el archivo .env}
+    ports:
+      - "8080:8080"
+
 volumes:
   mysql_data:

@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.accenture.pruebaaccenture.franquicia.repository.FranquiciaRepository;
 import com.accenture.pruebaaccenture.producto.domain.Producto;
+import com.accenture.pruebaaccenture.producto.dto.ActualizarNombreRequest;
 import com.accenture.pruebaaccenture.producto.dto.ActualizarStockRequest;
 import com.accenture.pruebaaccenture.producto.dto.CrearProductoRequest;
 import com.accenture.pruebaaccenture.producto.dto.ProductoResponse;
@@ -227,6 +228,32 @@ class ProductoServiceTest {
 
         verify(productoRepository, never()).listarProductosPorFranquicia(anyLong());
         verify(sucursalRepository, never()).findAllById(anyList());
+    }
+
+    @Test
+    void renombrarProductoActualizaYRetornaNombreNuevo() {
+        when(productoRepository.actualizarNombre(100L, "Producto Renombrado")).thenReturn(Mono.just(1L));
+        when(productoRepository.findById(100L))
+                .thenReturn(Mono.just(nuevoProducto(100L, "Producto Renombrado", 25)));
+
+        StepVerifier.create(productoService.renombrarProducto(100L, new ActualizarNombreRequest("Producto Renombrado")))
+                .assertNext(respuesta -> {
+                    assertThat(respuesta.id()).isEqualTo(100L);
+                    assertThat(respuesta.nombre()).isEqualTo("Producto Renombrado");
+                    assertThat(respuesta.stock()).isEqualTo(25);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void renombrarProductoConIdInexistenteLanzaExcepcion() {
+        when(productoRepository.actualizarNombre(999L, "Producto Renombrado")).thenReturn(Mono.just(0L));
+
+        StepVerifier.create(productoService.renombrarProducto(999L, new ActualizarNombreRequest("Producto Renombrado")))
+                .expectError(ProductoNotFoundException.class)
+                .verify();
+
+        verify(productoRepository, never()).findById(anyLong());
     }
 
     private Producto nuevoProducto(Long id, String nombre, Integer stock) {

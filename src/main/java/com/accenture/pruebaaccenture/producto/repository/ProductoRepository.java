@@ -13,6 +13,10 @@ public interface ProductoRepository extends ReactiveCrudRepository<Producto, Lon
     @Query("UPDATE producto SET stock = :stock WHERE id = :id")
     Mono<Long> actualizarStock(Long id, Integer stock);
 
+    @Modifying
+    @Query("UPDATE producto SET nombre = :nombre WHERE id = :id")
+    Mono<Long> actualizarNombre(Long id, String nombre);
+
     @Query("""
             SELECT p.id, p.nombre, p.stock, p.id_sucursal
             FROM producto p

@@ -10,12 +10,16 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.bind.support.WebExchangeBindException;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.server.ServerWebInputException;
 import reactor.core.publisher.Mono;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+    private static final String MENSAJE_RECURSO_INEXISTENTE = "Recurso no encontrado";
+    private static final String MENSAJE_SOLICITUD_INVALIDA = "Solicitud no válida";
     private static final String MENSAJE_CONFLICTO = "La operación genera un conflicto con los datos existentes";
     private static final String MENSAJE_INTERNO = "Ocurrió un error interno en el servidor";
 
@@ -26,6 +30,19 @@ public class GlobalExceptionHandler {
     })
     public Mono<ResponseEntity<ErrorResponse>> manejarRecursoNoEncontrado(RuntimeException ex) {
         return Mono.just(construir(HttpStatus.NOT_FOUND, ex.getMessage()));
+    }
+
+    @ExceptionHandler(ServerWebInputException.class)
+    public Mono<ResponseEntity<ErrorResponse>> manejarSolicitudMalformada(ServerWebInputException ex) {
+        return Mono.just(construir(HttpStatus.BAD_REQUEST, MENSAJE_SOLICITUD_INVALIDA));
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public Mono<ResponseEntity<ErrorResponse>> manejarEstadoPorExcepcion(ResponseStatusException ex) {
+        HttpStatus estado = HttpStatus.resolve(ex.getStatusCode().value());
+        HttpStatus finalEstado = estado != null ? estado : HttpStatus.INTERNAL_SERVER_ERROR;
+        return Mono.just(construir(finalEstado,
+                finalEstado == HttpStatus.NOT_FOUND ? MENSAJE_RECURSO_INEXISTENTE : MENSAJE_SOLICITUD_INVALIDA));
     }
 
     @ExceptionHandler(WebExchangeBindException.class)

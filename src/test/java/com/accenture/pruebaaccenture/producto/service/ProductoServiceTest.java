@@ -3,6 +3,7 @@ package com.accenture.pruebaaccenture.producto.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,10 +16,10 @@ import com.accenture.pruebaaccenture.producto.dto.CrearProductoRequest;
 import com.accenture.pruebaaccenture.producto.dto.ProductoResponse;
 import com.accenture.pruebaaccenture.producto.dto.ProductoSucursalResponse;
 import com.accenture.pruebaaccenture.producto.repository.ProductoRepository;
-import com.accenture.pruebaaccenture.producto.repository.ProductoSucursal;
 import com.accenture.pruebaaccenture.shared.exception.FranquiciaNotFoundException;
 import com.accenture.pruebaaccenture.shared.exception.ProductoNotFoundException;
 import com.accenture.pruebaaccenture.shared.exception.SucursalNotFoundException;
+import com.accenture.pruebaaccenture.sucursal.domain.Sucursal;
 import com.accenture.pruebaaccenture.sucursal.repository.SucursalRepository;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
@@ -145,10 +146,13 @@ class ProductoServiceTest {
     @Test
     void consultarMaxStockRetornaUnProductoPorSucursalConNombreDeSucursal() {
         when(franquiciaRepository.existsById(ID_FRANQUICIA)).thenReturn(Mono.just(true));
-        when(productoRepository.findMaxStockConSucursalDeFranquicia(ID_FRANQUICIA))
+        when(productoRepository.findMaxStockPorSucursalDeFranquicia(ID_FRANQUICIA))
                 .thenReturn(Flux.just(
-                        proyeccion(100L, "Producto A", 50, ID_SUCURSAL, "Sucursal Norte"),
-                        proyeccion(101L, "Producto B", 45, 22L, "Sucursal Sur")));
+                        nuevoProducto(100L, "Producto A", 50, ID_SUCURSAL),
+                        nuevoProducto(101L, "Producto B", 45, 22L)));
+        when(sucursalRepository.findAllById(anyList())).thenReturn(Flux.just(
+                sucursal(22L, "Sucursal Sur"),
+                sucursal(ID_SUCURSAL, "Sucursal Norte")));
 
         StepVerifier.create(productoService.consultarMaxStockPorFranquicia(ID_FRANQUICIA))
                 .assertNext(respuesta -> {
@@ -172,17 +176,21 @@ class ProductoServiceTest {
                 .expectError(FranquiciaNotFoundException.class)
                 .verify();
 
-        verify(productoRepository, never()).findMaxStockConSucursalDeFranquicia(anyLong());
+        verify(productoRepository, never()).findMaxStockPorSucursalDeFranquicia(anyLong());
+        verify(sucursalRepository, never()).findAllById(anyList());
     }
 
     @Test
     void listarProductosRetornaTodosConSuSucursal() {
         when(franquiciaRepository.existsById(ID_FRANQUICIA)).thenReturn(Mono.just(true));
-        when(productoRepository.listarConSucursalPorFranquicia(ID_FRANQUICIA))
+        when(productoRepository.listarProductosPorFranquicia(ID_FRANQUICIA))
                 .thenReturn(Flux.just(
-                        proyeccion(100L, "Producto A", 10, ID_SUCURSAL, "Sucursal Norte"),
-                        proyeccion(101L, "Producto B", 0, ID_SUCURSAL, "Sucursal Norte"),
-                        proyeccion(105L, "Producto C", 3, 22L, "Sucursal Sur")));
+                        nuevoProducto(100L, "Producto A", 10, ID_SUCURSAL),
+                        nuevoProducto(101L, "Producto B", 0, ID_SUCURSAL),
+                        nuevoProducto(105L, "Producto C", 3, 22L)));
+        when(sucursalRepository.findAllById(anyList())).thenReturn(Flux.just(
+                sucursal(ID_SUCURSAL, "Sucursal Norte"),
+                sucursal(22L, "Sucursal Sur")));
 
         StepVerifier.create(productoService.listarProductosDeFranquicia(ID_FRANQUICIA))
                 .assertNext(respuesta -> {
@@ -192,6 +200,7 @@ class ProductoServiceTest {
                 .assertNext(respuesta -> assertThat(respuesta.stock()).isZero())
                 .assertNext(respuesta -> {
                     assertThat(respuesta.idSucursal()).isEqualTo(22L);
+                    assertThat(respuesta.nombreSucursal()).isEqualTo("Sucursal Sur");
                     assertThat(respuesta.nombre()).isEqualTo("Producto C");
                 })
                 .verifyComplete();
@@ -200,10 +209,12 @@ class ProductoServiceTest {
     @Test
     void listarProductosConFranquiciaSinProductosRetornaFluxVacio() {
         when(franquiciaRepository.existsById(ID_FRANQUICIA)).thenReturn(Mono.just(true));
-        when(productoRepository.listarConSucursalPorFranquicia(ID_FRANQUICIA)).thenReturn(Flux.empty());
+        when(productoRepository.listarProductosPorFranquicia(ID_FRANQUICIA)).thenReturn(Flux.empty());
 
         StepVerifier.create(productoService.listarProductosDeFranquicia(ID_FRANQUICIA))
                 .verifyComplete();
+
+        verify(sucursalRepository, never()).findAllById(anyList());
     }
 
     @Test
@@ -214,7 +225,8 @@ class ProductoServiceTest {
                 .expectError(FranquiciaNotFoundException.class)
                 .verify();
 
-        verify(productoRepository, never()).listarConSucursalPorFranquicia(anyLong());
+        verify(productoRepository, never()).listarProductosPorFranquicia(anyLong());
+        verify(sucursalRepository, never()).findAllById(anyList());
     }
 
     private Producto nuevoProducto(Long id, String nombre, Integer stock) {
@@ -223,33 +235,16 @@ class ProductoServiceTest {
         return producto;
     }
 
-    private ProductoSucursal proyeccion(Long id, String nombre, Integer stock,
-                                        Long idSucursal, String nombreSucursal) {
-        return new ProductoSucursal() {
-            @Override
-            public Long getId() {
-                return id;
-            }
+    private Producto nuevoProducto(Long id, String nombre, Integer stock, Long idSucursal) {
+        Producto producto = new Producto(idSucursal, nombre, stock);
+        producto.setId(id);
+        return producto;
+    }
 
-            @Override
-            public String getNombre() {
-                return nombre;
-            }
-
-            @Override
-            public Integer getStock() {
-                return stock;
-            }
-
-            @Override
-            public Long getIdSucursal() {
-                return idSucursal;
-            }
-
-            @Override
-            public String getNombreSucursal() {
-                return nombreSucursal;
-            }
-        };
+    private Sucursal sucursal(Long id, String nombre) {
+        Sucursal sucursal = new Sucursal(ID_FRANQUICIA, nombre);
+        sucursal.setId(id);
+        return sucursal;
     }
 }
+

@@ -5,7 +5,7 @@ import org.springframework.data.relational.core.mapping.Table;
 
 @Table("sucursal")
 public class Sucursal {
-
+    @Id
     private Long id;
     private String nombre;
     private Long idFranquicia;

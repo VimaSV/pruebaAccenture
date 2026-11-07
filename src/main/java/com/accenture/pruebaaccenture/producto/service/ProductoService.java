@@ -7,11 +7,14 @@ import com.accenture.pruebaaccenture.producto.dto.CrearProductoRequest;
 import com.accenture.pruebaaccenture.producto.dto.ProductoResponse;
 import com.accenture.pruebaaccenture.producto.dto.ProductoSucursalResponse;
 import com.accenture.pruebaaccenture.producto.repository.ProductoRepository;
-import com.accenture.pruebaaccenture.producto.repository.ProductoSucursal;
 import com.accenture.pruebaaccenture.shared.exception.FranquiciaNotFoundException;
 import com.accenture.pruebaaccenture.shared.exception.ProductoNotFoundException;
 import com.accenture.pruebaaccenture.shared.exception.SucursalNotFoundException;
+import com.accenture.pruebaaccenture.sucursal.domain.Sucursal;
 import com.accenture.pruebaaccenture.sucursal.repository.SucursalRepository;
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -63,24 +66,43 @@ public class ProductoService {
         return franquiciaRepository.existsById(idFranquicia)
                 .filter(Boolean::booleanValue)
                 .switchIfEmpty(Mono.error(new FranquiciaNotFoundException(idFranquicia)))
-                .flatMapMany(existe -> productoRepository.findMaxStockConSucursalDeFranquicia(idFranquicia))
-                .map(this::aRespuestaConSucursal);
+                .flatMapMany(existe -> productoRepository.findMaxStockPorSucursalDeFranquicia(idFranquicia))
+                .collectList()
+                .flatMapMany(this::aRespuestasConSucursal);
     }
 
     public Flux<ProductoSucursalResponse> listarProductosDeFranquicia(Long idFranquicia) {
         return franquiciaRepository.existsById(idFranquicia)
                 .filter(Boolean::booleanValue)
                 .switchIfEmpty(Mono.error(new FranquiciaNotFoundException(idFranquicia)))
-                .flatMapMany(existe -> productoRepository.listarConSucursalPorFranquicia(idFranquicia))
-                .map(this::aRespuestaConSucursal);
+                .flatMapMany(existe -> productoRepository.listarProductosPorFranquicia(idFranquicia))
+                .collectList()
+                .flatMapMany(this::aRespuestasConSucursal);
     }
 
-    private ProductoSucursalResponse aRespuestaConSucursal(ProductoSucursal proyeccion) {
+    private Flux<ProductoSucursalResponse> aRespuestasConSucursal(List<Producto> productos) {
+        if (productos.isEmpty()) {
+            return Flux.empty();
+        }
+        return sucursalRepository.findAllById(idsSucursales(productos))
+                .collectMap(Sucursal::getId, Sucursal::getNombre)
+                .flatMapMany(nombresPorSucursal -> Flux.fromIterable(productos)
+                        .map(producto -> aRespuestaConSucursal(producto, nombresPorSucursal)));
+    }
+
+    private List<Long> idsSucursales(List<Producto> productos) {
+        return productos.stream()
+                .map(Producto::getIdSucursal)
+                .distinct()
+                .collect(Collectors.toList());
+    }
+
+    private ProductoSucursalResponse aRespuestaConSucursal(Producto producto, Map<Long, String> nombresPorSucursal) {
         return new ProductoSucursalResponse(
-                proyeccion.getId(),
-                proyeccion.getNombre(),
-                proyeccion.getStock(),
-                proyeccion.getIdSucursal(),
-                proyeccion.getNombreSucursal());
+                producto.getId(),
+                producto.getNombre(),
+                producto.getStock(),
+                producto.getIdSucursal(),
+                nombresPorSucursal.get(producto.getIdSucursal()));
     }
 }

@@ -1,199 +1,132 @@
-# pruebaAccenture - API de Franquicias
-
-API REST reactiva para administrar franquicias, sucursales y productos. Una **franquicia** contiene varias **sucursales**; cada **sucursal** vende varios **productos**, cada uno con su propio **stock**. Sobre este modelo la API permite crear franquicias y sucursales, agregar, renombrar, eliminar productos, y consultar el producto con mayor stock de cada sucursal de una franquicia.
-
-La aplicación está desarrollada con **programación reactiva** (Spring WebFlux + Reactor): los flujos HTTP y de base de datos usan `Mono` y `Flux` sin llamadas bloqueantes.
+# pruebaAccenture — API de Franquicias
 
 ## 1. Descripción del proyecto
 
-- Una franquicia tiene un nombre y varias sucursales.
-- Una sucursal pertenece a una franquicia, tiene un nombre y varios productos.
-- Un producto pertenece a una sucursal, tiene un nombre y una cantidad de stock.
+API REST para la administración centralizada de una red comercial de franquicias: altas de franquicias y sucursales, catálogo de productos por sucursal, gestión de stock y consultas de inventario.
 
-Operaciones principales: crear franquicias, crear sucursales dentro de una franquicia, agregar productos a una sucursal, eliminar productos, actualizar stock y nombre, consultar el producto con mayor stock de cada sucursal (desempatando por el ID más bajo) y listar todos los productos de una franquicia junto con la sucursal a la que pertenecen.
+Resuelve el problema de conocer el estado de un inventario distribuido: qué productos vende cada sucursal, cuánto stock tiene cada uno y cuál es el producto de mayor stock en cada sucursal de una franquicia, sin tener que recorrer cada punto de venta.
 
-## 2. Tecnologías utilizadas
+Modelo de negocio:
 
-- Java 21
-- Spring Boot 4.1.2
-- Spring WebFlux (Netty)
-- Spring Data R2DBC con driver `r2dbc-mysql` (io.asyncer)
-- MySQL 8.4 (en Docker)
-- Docker y Docker Compose
-- Maven Wrapper (`mvnw.cmd` / `mvnw`)
-- JUnit 5, Mockito y Reactor Test (StepVerifier)
+- Una **franquicia** tiene un nombre y agrupa varias **sucursales**.
+- Una **sucursal** pertenece a una franquicia, tiene un nombre y su propio catálogo de **productos**.
+- Un **producto** pertenece a una sucursal, tiene un nombre y una cantidad de **stock**.
 
-La aplicación funciona bajo **programación reactiva** (Spring WebFlux + Reactor): los controladores, servicios y repositorios componen flujos no bloqueantes con `Mono` y `Flux`, sin llamadas bloqueantes.
+## 2. Funcionalidades
 
-## 3. Requisitos previos
+### Obligatorias (criterios de aceptación)
 
-### Para ejecutar TODO el stack con Docker Compose (Opción A)
+- Crear franquicias.
+- Crear sucursales asociadas a una franquicia.
+- Agregar productos a una sucursal.
+- Eliminar productos.
+- Actualizar el stock de un producto.
+- Consultar el producto con mayor stock de cada sucursal de una franquicia (si hay empate, gana el ID más bajo).
+- Listar los productos de una franquicia indicando la sucursal a la que pertenece cada uno.
 
-Obligatorios:
+### Adicionales (puntos extra)
 
-- **Git**: para clonar el repositorio.
-- **Docker Desktop** con Docker Compose: compila la imagen de la API y ejecuta MySQL.
+- Actualizar el nombre de una franquicia, de una sucursal y de un producto.
 
-Con Docker **NO es necesario tener Java ni Maven instalados localmente**: el JDK 21 y Maven que compilan el proyecto lo hace Docker internamente (etapas del Dockerfile).
+El detalle de rutas, cuerpos y códigos HTTP está en la sección [6. Endpoints](#6-endpoints).
 
-Opcionales:
+## 3. Tecnologías
 
-- Un cliente HTTP (Postman, curl o similar) para probar los endpoints.
-
-### Para desarrollo local con Maven (Opción B)
-
-Obligatorios:
-
-- **JDK 21**: verificar con `java -version` (debe indicar versión 21.x).
-- **Docker Desktop**: para ejecutar MySQL en contenedor.
-
-Opcionales:
-
-- IDE: IntelliJ IDEA, VS Code o Eclipse con soporte de Java 21.
-- Un cliente HTTP (Postman, curl o similar).
-
-No es necesario instalar Maven: el proyecto incluye Maven Wrapper.
-
-## 4. Configuración de variables de entorno
-
-Cree un archivo `.env` en la raíz del proyecto a partir de `.env.example`:
-
-```powershell
-Copy-Item .env.example .env
-```
-
-Luego edítelo y reemplace las contraseñas por sus propios valores. Variables:
-
-| Variable | Uso |
+| Tecnología | Función |
 |---|---|
-| `MYSQL_ROOT_PASSWORD` | Contraseña del usuario root de MySQL dentro del contenedor Docker (no la usa la aplicación). |
-| `MYSQL_FRANQUICIAS_APP_PASSWORD` | Contraseña del usuario de aplicación `franquicias_app` que Docker crea al inicializar el contenedor. |
-| `DB_URL` | URL R2DBC de conexión: `r2dbc:mysql://localhost:3306/franquicias_db` (la aplicación NO usa root; usa `franquicias_app`). |
-| `DB_USERNAME` | Usuario de la aplicación: `franquicias_app`. |
-| `DB_PASSWORD` | Contraseña del usuario de aplicación. Debe coincidir con `MYSQL_FRANQUICIAS_APP_PASSWORD`. |
+| Java 21 | Lenguaje de la aplicación. |
+| Spring Boot 4.1.2 | Framework base de la API. |
+| Spring WebFlux (Netty) | Capa HTTP reactiva (endpoints sobre `Mono` y `Flux`). |
+| Spring Data R2DBC + driver `r2dbc-mysql` (io.asyncer) | Acceso a datos no bloqueante hacia MySQL. |
+| MySQL 8.4 | Base de datos, ejecutada en Docker. |
+| Docker y Docker Compose | Construcción de la imagen de la API y orquestación de API + MySQL. |
+| Maven Wrapper (`mvnw.cmd` / `mvnw`) | Compilación y pruebas sin instalar Maven. |
+| JUnit 5, Mockito y StepVerifier (Reactor Test) | Pruebas unitarias y de integración. |
 
-`DB_PASSWORD` debe coincidir con `MYSQL_FRANQUICIAS_APP_PASSWORD`; ambos deben setearse a la misma contraseña. El usuario `franquicias_app` se crea automáticamente la primera vez que se inicializa el contenedor. Nunca se use el usuario root desde la aplicación.
+La aplicación es **reactiva** de extremo a extremo: controladores, servicios y repositorios componen flujos `Mono`/`Flux` sin llamadas bloqueantes, sin mezclar acceso bloqueante a la base de datos (no se usa JPA ni JDBC).
 
-> **Nota por modalidad:** en la **Opción A (Docker Compose)** solo hacen falta `MYSQL_ROOT_PASSWORD` y `MYSQL_FRANQUICIAS_APP_PASSWORD`, porque Compose configura directamente las variables `DB_*` del contenedor de la API (incluida la URL con host interno `mysql`). Las variables `DB_*` del `.env` se usan únicamente en la **Opción B (Maven local)**.
+## 4. Requisitos e instalación
 
-El archivo `.env` está excluido en `.gitignore` y no debe commitearse. `.env.example` sí se sube al repositorio solo como referencia sin valores reales.
+| | Opción A: Docker Compose (recomendada) | Opción B: desarrollo local |
+|---|---|---|
+| Necesita | Git y Docker Desktop | JDK 21 y Docker Desktop |
+| No necesita | Java ni Maven instalados (el JDK 21 y Maven que compilan el proyecto se ejecutan dentro de Docker) | Maven (usa el Maven Wrapper) |
+| Cómo empezar | Sección 5 | Sección 9 |
 
-## 5. Ejecución de MySQL con Docker Compose (para la Opción B)
+En la Opción A, la persona que clona el repositorio no necesita más requisitos: Docker Desktop se encarga de construir la imagen (compilando y empaquetando el proyecto dentro del propio build) y de ejecutar MySQL y la API en contenedores separados.
 
-MySQL corre en Docker en todas las modalidades. Para iniciar **solo MySQL** (sin la API, que en la Opción B se ejecuta con Maven):
+## 5. Configuración y ejecución con Docker
 
-```powershell
-# iniciar solo el contenedor de MySQL (lee el .env de la raíz automáticamente)
-docker compose up -d mysql
+Docker ejecuta dos contenedores: `mysql` (base de datos MySQL 8.4) y `api` (Spring Boot, imagen construida desde el `Dockerfile`). La API arranca cuando MySQL reporta estar saludable (`depends_on: condition: service_healthy`) y los datos persisten en el volumen Docker `mysql_data`.
 
-# verificar que el estado del contenedor sea "healthy"
-docker compose ps
-```
+1. **Clonar el repositorio:**
+2. **Crear el archivo `.env`** a partir del ejemplo:
 
-> Si ejecuta `docker compose up -d` **sin indicar el servicio**, Compose levantará también el servicio `api` (la API dentro de Docker, Opción A).
+   Copy-Item .env.example .env
 
-Para detener los contenedores conservando los datos:
+3. **Configurar las contraseñas** editando `.env`. Para la Opción A solo se leen estas dos variables:
 
-```powershell
-docker compose down
-```
+   | Variable | Significado |
+   |---|---|
+   | `MYSQL_ROOT_PASSWORD` | Contraseña de root de MySQL (interna del contenedor; la API no la usa). |
+   | `MYSQL_FRANQUICIAS_APP_PASSWORD` | Contraseña del usuario de aplicación `franquicias_app`, que Compose crea e inyecta en el contenedor de la API. |
 
-`docker compose down` detiene tanto MySQL como la API si está corriendo, pero **NO borra la información**: los datos se conservan en el volumen nombrado `mysql_data`. Solo si quiere eliminarla por completo (borra todos los datos):
+   Los valores `DB_*` del `.env` no se usan en esta modalidad: Compose configura directamente el contenedor de la API con la URL `r2dbc:mysql://mysql:3306/franquicias_db` (host interno `mysql`) y la contraseña de `franquicias_app`.
 
-```powershell
-docker compose down -v   # ¡cuidado: borra todos los datos!
-```
+4. **Construir e iniciar ambos servicios:**
+   ```powershell
+   docker compose up -d --build
+   ```
+5. **Comprobar los servicios** (`mysql` debe verse `healthy` y `api` `running`):
 
-## 6. Ejecución de la aplicación
+   ```powershell
+   docker compose ps
+   ```
 
-### Opción A: TODO el stack con Docker Compose (API + MySQL) — recomendada
+6. **Consultar logs** si es necesario:
 
-Requiere únicamente **Git y Docker Desktop** (ver requisitos previos). Con el `.env` ya creado (paso 4), clona el proyecto, entra a su carpeta y construye e inicia ambos servicios:
+   ```powershell
+   docker compose logs -f api   # logs de la API
+   docker compose logs mysql    # logs de MySQL
+   ```
 
-```powershell
-git clone <URL-DE-TU-REPOSITORIO-GITHUB>
-cd pruebaAccenture
-```
+7. **Acceder a la API desde Postman:** base URL `http://localhost:8080`, sin autenticación. Las peticiones con cuerpo requieren `Content-Type: application/json`. Use las rutas de la [sección 6](#6-endpoints) y los ejemplos de la [sección 7](#7-ejemplos-de-uso).
 
-```powershell
-docker compose up -d --build
-```
+8. **Detener los servicios conservando los datos:**
 
-Comprueba el estado: `api` y `mysql` deben estar `running` y `mysql` además `healthy`:
+   ```powershell
+   docker compose down
+   ```
 
-```powershell
-docker compose ps
-```
+   `down` detiene los contenedores sin borrar datos (quedan en el volumen `mysql_data`). Tras cambiar código, reconstruya solo la API con `docker compose up -d --build api`. Para eliminar también los datos: `docker compose down -v` (advertencia: borra todo el inventario registrado).
 
-La API arranca **solo cuando MySQL ya está saludable** (dependencia `service_healthy`); no es necesario esperar manualmente. La API queda en `http://localhost:8080`. Dentro de la red de Docker, la API se conecta a MySQL usando el nombre del servicio como host (`r2dbc:mysql://mysql:3306/franquicias_db`), configurado automáticamente por Compose.
+## 6. Endpoints
 
-Comandos útiles:
+Base URL: `http://localhost:8080`. Los `/api` prefijan todas las rutas.
 
-```powershell
-# logs de la API (y de MySQL si hace falta)
-docker compose logs -f api
-docker compose logs mysql
+### Endpoints obligatorios
 
-# detener todo conservando los datos
-docker compose down
-
-# reconstruir y reiniciar solo la API tras cambios de código
-docker compose up -d --build api
-```
-
-El volumen `mysql_data` conserva los datos entre reinicios; `docker compose down` NO los borra.
-
-**Acceso con Postman (y cualquier cliente HTTP):** una vez que `docker compose ps` muestre la API en ejecución, apunte sus peticiones a la base URL `http://localhost:8080` (puerto publicado por Compose). La API no exige autenticación ni cabeceras especiales más allá de `Content-Type: application/json` en los cuerpos. Use la tabla de endpoints (paso 7) y los ejemplos (paso 8) para armar las peticiones.
-
-### Opción B: ejecución local con Maven (desarrollo)
-
-Requiere **JDK 21** y Docker Desktop (MySQL en Docker; inícielo con `docker compose up -d mysql`, paso 5). Spring Boot **no lee el archivo `.env`** cuando se ejecuta con Maven. Antes de arrancar o ejecutar pruebas, cargue las variables en la sesión de PowerShell:
-
-```powershell
-# cargar las variables del .env en la sesión de PowerShell actual
-Get-Content .env | ForEach-Object {
-    if ($_ -match '^\s*([^#][^=]+?)\s*=\s*(.*)\s*$') {
-        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
-    }
-}
-
-# comprobar que quedaron cargadas
-Get-ChildItem Env:DB_*, Env:MYSQL_*
-```
-
-Estas variables existen solo en la sesión actual; al abrir una terminal nueva hay que volver a cargarlas.
-
-Con las variables ya cargadas, arranque la aplicación:
-
-```powershell
-.\mvnw.cmd spring-boot:run
-```
-
-La aplicación escucha en el puerto **8080**. Al arrancar, Spring ejecuta `schema.sql` contra MySQL (`spring.sql.init.mode=always`), que crea las tablas de forma idempotente con `CREATE TABLE IF NOT EXISTS`.
-
-## 7. Endpoints
-
-### Endpoints obligatorios (criterios de aceptación)
-
-| Método | Ruta | Descripción | Parámetros | Body JSON | Código esperado |
-|---|---|---|---|---|---|
-| POST | `/api/franquicias` | Crear franquicia | — | `{"nombre": "Farmacias XYZ"}` | 201 |
-| POST | `/api/franquicias/{idFranquicia}/sucursales` | Crear sucursal en una franquicia | `idFranquicia` en la ruta | `{"nombre": "Sucursal Norte"}` | 201 |
-| POST | `/api/sucursales/{idSucursal}/productos` | Agregar producto a una sucursal | `idSucursal` en la ruta | `{"nombre": "Paracetamol 500", "stock": 100}` | 201 |
-| DELETE | `/api/productos/{id}` | Eliminar un producto | `id` en la ruta | — | 204 |
-| PATCH | `/api/productos/{id}/stock` | Actualizar stock de un producto | `id` en la ruta | `{"stock": 50}` | 200 |
-| GET | `/api/franquicias/{idFranquicia}/top-productos` | Producto con mayor stock de cada sucursal de una franquicia | `idFranquicia` en la ruta | — | 200 |
-| GET | `/api/franquicias/{idFranquicia}/productos` | Listar productos de una franquicia con su sucursal | `idFranquicia` en la ruta | — | 200 |
+| Método | Ruta | Descripción | Body JSON | Código |
+|---|---|---|---|---|
+| POST | `/api/franquicias` | Crear franquicia | `{"nombre": "Farmacias XYZ"}` | 201 |
+| POST | `/api/franquicias/{idFranquicia}/sucursales` | Crear sucursal en una franquicia | `{"nombre": "Sucursal Norte"}` | 201 |
+| POST | `/api/sucursales/{idSucursal}/productos` | Agregar producto a una sucursal | `{"nombre": "Paracetamol 500", "stock": 100}` | 201 |
+| DELETE | `/api/productos/{id}` | Eliminar producto | — | 204 |
+| PATCH | `/api/productos/{id}/stock` | Actualizar stock | `{"stock": 50}` | 200 |
+| GET | `/api/franquicias/{idFranquicia}/top-productos` | Producto con mayor stock de cada sucursal de la franquicia | — | 200 |
+| GET | `/api/franquicias/{idFranquicia}/productos` | Listar productos de la franquicia con su sucursal | — | 200 |
 
 ### Endpoints adicionales (puntos extra)
 
-| Método | Ruta | Descripción | Parámetros | Body JSON | Código esperado |
-|---|---|---|---|---|---|
-| PATCH | `/api/franquicias/{id}/nombre` | Actualizar nombre de una franquicia | `id` en la ruta | `{"nombre": "Nuevo nombre"}` | 200 |
-| PATCH | `/api/sucursales/{id}/nombre` | Actualizar nombre de una sucursal | `id` en la ruta | `{"nombre": "Nuevo nombre"}` | 200 |
-| PATCH | `/api/productos/{id}/nombre` | Actualizar nombre de un producto | `id` en la ruta | `{"nombre": "Nuevo nombre"}` | 200 |
+| Método | Ruta | Descripción | Body JSON | Código |
+|---|---|---|---|---|
+| PATCH | `/api/franquicias/{id}/nombre` | Renombrar franquicia | `{"nombre": "Nuevo nombre"}` | 200 |
+| PATCH | `/api/sucursales/{id}/nombre` | Renombrar sucursal | `{"nombre": "Nuevo nombre"}` | 200 |
+| PATCH | `/api/productos/{id}/nombre` | Renombrar producto | `{"nombre": "Nuevo nombre"}` | 200 |
 
-Respuesta de error ante datos inválidos (400) o recurso inexistente (404):
+Reglas de validación: los nombres son obligatorios, de hasta 150 caracteres, y el stock no puede ser negativo.
+
+Formato de error (400 con datos inválidos, 404 si el recurso no existe, 409 en conflicto de integridad referencial):
 
 ```json
 {
@@ -204,149 +137,124 @@ Respuesta de error ante datos inválidos (400) o recurso inexistente (404):
 }
 ```
 
-## 8. Ejemplos de uso
+## 7. Ejemplos de uso
 
-### Crear franquicia (criterio #2)
+> Los **IDs de los ejemplos no están garantizados**: cada instalación genera registros propios. Use los IDs devueltos por cada respuesta `201 Created` para encadenar las siguientes peticiones. A continuación se muestra ese encadenamiento real con PowerShell.
 
-```powershell
-curl.exe -X POST http://localhost:8080/api/franquicias -H "Content-Type: application/json" -d "{\"nombre\":\"Farmacias XYZ\"}"
-```
-
-Respuesta 201:
-
-```json
-{"id":1,"nombre":"Farmacias XYZ"}
-```
-
-### Crear sucursal en una franquicia (criterio #3)
+Crear una franquicia y una sucursal dentro de ella, usando el `id` de cada respuesta:
 
 ```powershell
-curl.exe -X POST http://localhost:8080/api/franquicias/1/sucursales -H "Content-Type: application/json" -d "{\"nombre\":\"Sucursal Norte\"}"
+$f = & curl.exe -s -X POST http://localhost:8080/api/franquicias -H "Content-Type: application/json" -d "{\"nombre\":\"Farmacias XYZ\"}" | ConvertFrom-Json
+
+& curl.exe -s -X POST http://localhost:8080/api/franquicias/$($f.id)/sucursales -H "Content-Type: application/json" -d "{\"nombre\":\"Sucursal Norte\"}"
 ```
 
-Respuesta 201:
-
-```json
-{"id":1,"nombre":"Sucursal Norte","idFranquicia":1}
-```
-
-### Agregar producto a una sucursal (criterio #4)
+Agregar un producto con su stock a la sucursal creada:
 
 ```powershell
-curl.exe -X POST http://localhost:8080/api/sucursales/1/productos -H "Content-Type: application/json" -d "{\"nombre\":\"Paracetamol 500\",\"stock\":100}"
+& curl.exe -s -X POST http://localhost:8080/api/sucursales/1/productos -H "Content-Type: application/json" -d "{\"nombre\":\"Paracetamol 500\",\"stock\":100}"
 ```
 
-Respuesta 201:
+Respuesta 201: `{"id":1,"nombre":"Paracetamol 500","stock":100}`
 
-```json
-{"id":1,"nombre":"Paracetamol 500","stock":100}
-```
-
-### Actualizar stock de un producto (criterio #6)
+Actualizar stock, renombrar y eliminar un producto:
 
 ```powershell
-curl.exe -X PATCH http://localhost:8080/api/productos/1/stock -H "Content-Type: application/json" -d "{\"stock\":50}"
+& curl.exe -s -X PATCH http://localhost:8080/api/productos/1/stock -H "Content-Type: application/json" -d "{\"stock\":50}"
+
+& curl.exe -s -X DELETE http://localhost:8080/api/productos/1
 ```
 
-Respuesta 200 (el producto actualizado):
-
-```json
-{"id":1,"nombre":"Paracetamol 500","stock":50}
-```
-
-### Eliminar un producto (criterio #5)
+Consultas de inventario de una franquicia (200):
 
 ```powershell
-curl.exe -X DELETE http://localhost:8080/api/productos/1
+# producto con mayor stock de cada sucursal de la franquicia
+& curl.exe -s http://localhost:8080/api/franquicias/1/top-productos
+
+# todos los productos de la franquicia con el nombre de su sucursal
+& curl.exe -s http://localhost:8080/api/franquicias/1/productos
 ```
 
-Respuesta 204 sin cuerpo. Si el producto no existe, responde 404.
-
-### Actualizar nombre de una franquicia (punto extra #3)
-
-```powershell
-curl.exe -X PATCH http://localhost:8080/api/franquicias/1/nombre -H "Content-Type: application/json" -d "{\"nombre\":\"Nuevo nombre\"}"
-```
-
-### Actualizar nombre de una sucursal (punto extra #4)
-
-```powershell
-curl.exe -X PATCH http://localhost:8080/api/sucursales/1/nombre -H "Content-Type: application/json" -d "{\"nombre\":\"Sucursal Renombrada\"}"
-```
-
-### Actualizar nombre de un producto (punto extra #5)
-
-```powershell
-curl.exe -X PATCH http://localhost:8080/api/productos/1/nombre -H "Content-Type: application/json" -d "{\"nombre\":\"Producto Renombrado\"}"
-```
-
-### Consultar productos con mayor stock por sucursal (criterio #7)
-
-```powershell
-curl.exe http://localhost:8080/api/franquicias/2/top-productos
-```
-
-Respuesta (01 producto por sucursal, incluido el nombre de la sucursal):
+Respuesta típica (incluye `nombreSucursal`; los valores dependen de sus datos):
 
 ```json
 [
-  {"id":3,"nombre":"monitor","stock":50,"idSucursal":1,"nombreSucursal":"Sucursal centro"},
-  {"id":4,"nombre":"iphone","stock":50,"idSucursal":2,"nombreSucursal":"Sucursal norte"}
+  {"id":1,"nombre":"Paracetamol 500","stock":50,"idSucursal":1,"nombreSucursal":"Sucursal Norte"}
 ]
 ```
 
-### Listar productos de una franquicia con su sucursal (criterio #7)
+Si la franquicia o el producto no existen, la API responde `404` con el formato de error de la [sección 6](#6-endpoints).
 
-```powershell
-curl.exe http://localhost:8080/api/franquicias/2/productos
-```
+## 8. Pruebas
 
-Respuesta (todos los productos y el nombre de la sucursal):
+Requisitos: JDK 21 y, para la suite de integración, MySQL corriendo (`docker compose up -d mysql`) y las variables del `.env` cargadas en PowerShell (ver [sección 9](#9-ejecución-para-desarrollo-local)). Las pruebas unitarias no necesitan MySQL ni variables.
 
-```json
-[
-  {"id":1,"nombre":"Laptop","stock":20,"idSucursal":1,"nombreSucursal":"Sucursal centro"},
-  {"id":2,"nombre":"mouse","stock":30,"idSucursal":1,"nombreSucursal":"Sucursal centro"},
-  {"id":3,"nombre":"monitor","stock":50,"idSucursal":1,"nombreSucursal":"Sucursal centro"},
-  {"id":4,"nombre":"iphone","stock":50,"idSucursal":2,"nombreSucursal":"Sucursal norte"}
-]
-```
+| Tipo | Comando | Detalles |
+|---|---|---|
+| Unitarias | `.\mvnw.cmd test` | No requieren MySQL ni variables de entorno. |
+| De integración | `.\mvnw.cmd verify` | Etiquetadas con `@Tag("integracion")`; requieren MySQL levantado y las variables del `.env` cargadas. `verify` siempre las ejecuta después de las unitarias, por lo que no existe una corrida realmente aislada en el flujo Maven normal. |
+| Suite completa | `.\mvnw.cmd verify` | Unitarias + integración (cobertura total del proyecto). |
 
-## 9. Pruebas
+Nota: las pruebas se ejecutan fuera de Docker con el Maven Wrapper, ya que necesitan el JDK local y acceso a `localhost:3306`.
 
-Requieren JDK 21 (modalidad Opción B). Con las variables del `.env` **ya cargadas** en la sesión de PowerShell (bloque de carga de la Opción B) y MySQL levantado (`docker compose up -d mysql`):
+## 9. Ejecución para desarrollo local
 
-- **Unitarias** (no requieren MySQL ni variables de entorno):
-  ```powershell
-  .\mvnw.cmd test
-  ```
+Para iterar con Maven y recarga manual, se usa el MySQL de Docker y Spring Boot local:
 
-- **De integración** (`@Tag("integracion")`; requieren MySQL levantado y las variables del `.env` cargadas):
-  ```powershell
-  .\mvnw.cmd verify
-  ```
+1. **Iniciar solo MySQL** (sin la API de Docker; `docker compose up -d` sin el servicio levantaría también la API):
 
-- **Suite completa**: el propio `mvnw verify` ejecuta primero las unitarias y luego las de integración, por lo que es el comando con la cobertura total del proyecto.
+   ```powershell
+   docker compose up -d mysql
+   docker compose ps   # esperar que mysql esté "healthy"
+   ```
+
+2. **Cargar las variables del `.env`** en la sesión de PowerShell (Spring Boot con Maven no lee `.env` automáticamente):
+
+   ```powershell
+   Get-Content .env | ForEach-Object {
+       if ($_ -match '^\s*([^#][^=]+?)\s*=\s*(.*)\s*$') {
+           [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+       }
+   }
+   Get-ChildItem Env:DB_*, Env:MYSQL_*   # comprobar que quedaron cargadas
+   ```
+
+   En esta modalidad se usan las variables `DB_*` (con `DB_URL` apuntando a `localhost:3306`). Solo valen para la sesión actual; al abrir una terminal nueva hay que cargarlas de nuevo.
+
+3. **Arrancar Spring Boot:**
+
+   ```powershell
+   .\mvnw.cmd spring-boot:run
+   ```
+
+   La API queda en `http://localhost:8080`. Al arrancar, Spring aplica `schema.sql` (`CREATE TABLE IF NOT EXISTS`), que crea tablas de forma idempotente sin scripts manuales.
 
 ## 10. Estructura del proyecto
 
-Organización por funcionalidad con separación de capas:
+Organización por funcionalidad, con separación de responsabilidades HTTP, negocio, datos y modelo:
 
-- `controller/`: expone los endpoints HTTP; delega en los servicios. Sin lógica de negocio.
-- `service/`: contiene las reglas y validaciones de negocio.
-- `repository/`: interfaces de acceso a datos Spring Data R2DBC (consultas derivadas y consultas SQL personalizadas con `@Query`).
-- `domain/`: entidades anotadas con `@Table` (franquicia, sucursal, producto).
-- `dto/`: objetos de entrada/salida de la API, separados de las entidades de dominio; validados con Jakarta Validation.
-- `shared/`: componentes transversales: `shared/exception` (excepciones de negocio y `GlobalExceptionHandler` con manejo global de errores) y `shared/error` (`ErrorResponse`).
+```
+com.accenture.pruebaaccenture
+├── franquicia/                  # funcionalidad "franquicia"
+│   ├── controller/  (FranquiciaController)
+│   ├── service/     (FranquiciaService)
+│   ├── repository/  (FranquiciaRepository — R2DBC)
+│   ├── domain/      (Franquicia)
+│   └── dto/         (CrearFranquiciaRequest, FranquiciaResponse, ActualizarNombreRequest)
+├── sucursal/                    # funcionalidad "sucursal" (misma estructura interna)
+├── producto/                    # funcionalidad "producto" (misma estructura interna)
+└── shared/                      # común a todas las funcionalidades
+    ├── exception/   (excepciones NotFound y GlobalExceptionHandler)
+    └── error/       (ErrorResponse)
+```
 
-## 11. Consideraciones adicionales
+Responsabilidades por capa:
 
-- Aplicación usa **Spring Data R2DBC** con MySQL. La configuración se toma de las variables `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` (ver variables de entorno en paso 4).
-- Puerto de la aplicación: **8080**. Puerto de MySQL: **3306** (publicado por Docker Compose desde el contenedor `franquicias-mysql`).
-- La persistencia de datos vive en el volumen Docker `mysql_data`; por eso los datos persisten entre reinicios del contenedor.
-- La imagen Docker de la API es multi-etapa (Maven+JDK21 para compilar, solo JRE en la imagen final), corre con un usuario no root y no contiene secretos: las credenciales se inyectan al arrancar por Compose desde el `.env`.
-- Las pruebas automatizadas se ejecutan fuera de Docker con `mvnw test` y `mvnw verify` (necesitan MySQL local alcanzable en `localhost:3306`).
-- Si MySQL no está saludable, ver los logs del contenedor con `docker compose logs mysql`.
-- Si la aplicación no arranca, revisar los logs de la sesión de ejecución (`spring-boot:run`). Errores comunes: variables de entorno del `.env` sin cargar, o contenedor MySQL no levantado.
-- La base de datos y las tablas se crean de forma idempotente al arranque (`schema.sql` con `CREATE TABLE IF NOT EXISTS`); no es necesario ejecutar scripts manualmente.
-- El proyecto no incluye despliegue en la nube ni aprovisionamiento IaC.
+- `controller/`: expone los endpoints HTTP, valida la entrada a través de DTOs anotados con Jakarta Validation y delega en el servicio. Sin lógica de negocio.
+- `service/`: concentra las reglas de negocio (existencia previa de franquicia/sucursal, transacciones, renombres, consulta de mayor stock).
+- `repository/`: interfaces de Spring Data R2DBC: consultas derivadas y consultas SQL personalizadas con `@Query`.
+- `domain/`: entidades de persistencia anotadas con `@Table` (mapeadas a las tablas de MySQL).
+- `dto/`: objetos de entrada/salida de la API, separados de las entidades del dominio.
+- `shared/`: manejo global de errores y excepciones de negocio, comunes a todas las funcionalidades.
+
+Archivos de configuración relevantes (raíz del proyecto): `Dockerfile` (imagen multi-etapa de la API), `docker-compose.yml` (servicios `mysql` y `api`), `.env.example` (plantilla de configuración) y `src/main/resources/schema.sql` (DDL de tablas + FKs + CHECK de stock, respetando el modelo sin `ON DELETE CASCADE`).

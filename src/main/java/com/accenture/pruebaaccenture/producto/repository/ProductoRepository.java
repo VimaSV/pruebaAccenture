@@ -14,8 +14,7 @@ public interface ProductoRepository extends ReactiveCrudRepository<Producto, Lon
     Mono<Long> actualizarStock(Long id, Integer stock);
 
     @Query("""
-            SELECT p.id, p.nombre, p.stock,
-                   s.id AS id_sucursal, s.nombre AS nombre_sucursal
+            SELECT p.id, p.nombre, p.stock, p.id_sucursal
             FROM producto p
             JOIN sucursal s ON p.id_sucursal = s.id
             WHERE s.id_franquicia = :idFranquicia
@@ -32,15 +31,14 @@ public interface ProductoRepository extends ReactiveCrudRepository<Producto, Lon
                   )
             ORDER BY p.id_sucursal ASC
             """)
-    Flux<ProductoSucursal> findMaxStockConSucursalDeFranquicia(Long idFranquicia);
+    Flux<Producto> findMaxStockPorSucursalDeFranquicia(Long idFranquicia);
 
     @Query("""
-            SELECT p.id, p.nombre, p.stock,
-                   s.id AS id_sucursal, s.nombre AS nombre_sucursal
+            SELECT p.id, p.nombre, p.stock, p.id_sucursal
             FROM producto p
             JOIN sucursal s ON p.id_sucursal = s.id
             WHERE s.id_franquicia = :idFranquicia
             ORDER BY s.id ASC, p.id ASC
             """)
-    Flux<ProductoSucursal> listarConSucursalPorFranquicia(Long idFranquicia);
+    Flux<Producto> listarProductosPorFranquicia(Long idFranquicia);
 }

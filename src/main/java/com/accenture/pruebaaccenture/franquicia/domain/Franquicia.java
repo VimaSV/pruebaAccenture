@@ -6,6 +6,7 @@ import org.springframework.data.relational.core.mapping.Table;
 @Table("franquicia")
 public class Franquicia {
 
+    @Id
     private Long id;
     private String nombre;
 

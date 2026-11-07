@@ -9,7 +9,9 @@ import static org.mockito.Mockito.when;
 
 import com.accenture.pruebaaccenture.franquicia.repository.FranquiciaRepository;
 import com.accenture.pruebaaccenture.shared.exception.FranquiciaNotFoundException;
+import com.accenture.pruebaaccenture.shared.exception.SucursalNotFoundException;
 import com.accenture.pruebaaccenture.sucursal.domain.Sucursal;
+import com.accenture.pruebaaccenture.sucursal.dto.ActualizarNombreRequest;
 import com.accenture.pruebaaccenture.sucursal.dto.CrearSucursalRequest;
 import com.accenture.pruebaaccenture.sucursal.dto.SucursalResponse;
 import com.accenture.pruebaaccenture.sucursal.repository.SucursalRepository;
@@ -79,5 +81,36 @@ class SucursalServiceTest {
                 .verify();
 
         verify(sucursalRepository, never()).save(any(Sucursal.class));
+    }
+
+    @Test
+    void renombrarSucursalActualizaYRetornaNombreNuevo() {
+        when(sucursalRepository.actualizarNombre(21L, "Sucursal Renombrada")).thenReturn(Mono.just(1L));
+        when(sucursalRepository.findById(21L)).thenReturn(Mono.just(sucursal(21L, "Sucursal Renombrada")));
+
+        StepVerifier.create(sucursalService.renombrarSucursal(21L, new ActualizarNombreRequest("Sucursal Renombrada")))
+                .assertNext(respuesta -> {
+                    assertThat(respuesta.id()).isEqualTo(21L);
+                    assertThat(respuesta.nombre()).isEqualTo("Sucursal Renombrada");
+                    assertThat(respuesta.idFranquicia()).isEqualTo(ID_FRANQUICIA);
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void renombrarSucursalConIdInexistenteLanzaExcepcion() {
+        when(sucursalRepository.actualizarNombre(999L, "Sucursal Renombrada")).thenReturn(Mono.just(0L));
+
+        StepVerifier.create(sucursalService.renombrarSucursal(999L, new ActualizarNombreRequest("Sucursal Renombrada")))
+                .expectError(SucursalNotFoundException.class)
+                .verify();
+
+        verify(sucursalRepository, never()).findById(999L);
+    }
+
+    private Sucursal sucursal(Long id, String nombre) {
+        Sucursal sucursal = new Sucursal(ID_FRANQUICIA, nombre);
+        sucursal.setId(id);
+        return sucursal;
     }
 }

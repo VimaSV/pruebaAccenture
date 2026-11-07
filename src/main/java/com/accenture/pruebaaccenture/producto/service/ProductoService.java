@@ -2,6 +2,7 @@ package com.accenture.pruebaaccenture.producto.service;
 
 import com.accenture.pruebaaccenture.franquicia.repository.FranquiciaRepository;
 import com.accenture.pruebaaccenture.producto.domain.Producto;
+import com.accenture.pruebaaccenture.producto.dto.ActualizarNombreRequest;
 import com.accenture.pruebaaccenture.producto.dto.ActualizarStockRequest;
 import com.accenture.pruebaaccenture.producto.dto.CrearProductoRequest;
 import com.accenture.pruebaaccenture.producto.dto.ProductoResponse;
@@ -54,6 +55,16 @@ public class ProductoService {
 
     public Mono<ProductoResponse> actualizarStock(Long id, ActualizarStockRequest request) {
         return productoRepository.actualizarStock(id, request.stock())
+                .flatMap(filasAfectadas -> filasAfectadas > 0
+                        ? productoRepository.findById(id)
+                              .map(producto -> new ProductoResponse(
+                                      producto.getId(), producto.getNombre(), producto.getStock()))
+                              .switchIfEmpty(Mono.error(new ProductoNotFoundException(id)))
+                        : Mono.error(new ProductoNotFoundException(id)));
+    }
+
+    public Mono<ProductoResponse> renombrarProducto(Long id, ActualizarNombreRequest request) {
+        return productoRepository.actualizarNombre(id, request.nombre())
                 .flatMap(filasAfectadas -> filasAfectadas > 0
                         ? productoRepository.findById(id)
                               .map(producto -> new ProductoResponse(

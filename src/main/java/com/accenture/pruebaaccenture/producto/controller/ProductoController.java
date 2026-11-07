@@ -1,5 +1,6 @@
 package com.accenture.pruebaaccenture.producto.controller;
 
+import com.accenture.pruebaaccenture.producto.dto.ActualizarNombreRequest;
 import com.accenture.pruebaaccenture.producto.dto.ActualizarStockRequest;
 import com.accenture.pruebaaccenture.producto.dto.CrearProductoRequest;
 import com.accenture.pruebaaccenture.producto.dto.ProductoResponse;
@@ -48,6 +49,13 @@ public class ProductoController {
             @PathVariable Long id,
             @Valid @RequestBody ActualizarStockRequest request) {
         return productoService.actualizarStock(id, request);
+    }
+
+    @PatchMapping("/productos/{id}/nombre")
+    public Mono<ProductoResponse> renombrar(
+            @PathVariable Long id,
+            @Valid @RequestBody ActualizarNombreRequest request) {
+        return productoService.renombrarProducto(id, request);
     }
 
     @GetMapping("/franquicias/{idFranquicia}/top-productos")

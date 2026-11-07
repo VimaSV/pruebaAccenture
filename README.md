@@ -27,15 +27,30 @@ La aplicación funciona bajo **programación reactiva** (Spring WebFlux + Reacto
 
 ## 3. Requisitos previos
 
+### Para ejecutar TODO el stack con Docker Compose (Opción A)
+
 Obligatorios:
 
-- **JDK 21**: verificar con `java -version` (debe indicar versión 21.x).
-- **Docker Desktop** con Docker Compose: para ejecutar MySQL.
+- **Git**: para clonar el repositorio.
+- **Docker Desktop** con Docker Compose: compila la imagen de la API y ejecuta MySQL.
+
+Con Docker **NO es necesario tener Java ni Maven instalados localmente**: el JDK 21 y Maven que compilan el proyecto lo hace Docker internamente (etapas del Dockerfile).
 
 Opcionales:
 
 - Un cliente HTTP (Postman, curl o similar) para probar los endpoints.
+
+### Para desarrollo local con Maven (Opción B)
+
+Obligatorios:
+
+- **JDK 21**: verificar con `java -version` (debe indicar versión 21.x).
+- **Docker Desktop**: para ejecutar MySQL en contenedor.
+
+Opcionales:
+
 - IDE: IntelliJ IDEA, VS Code o Eclipse con soporte de Java 21.
+- Un cliente HTTP (Postman, curl o similar).
 
 No es necesario instalar Maven: el proyecto incluye Maven Wrapper.
 
@@ -59,35 +74,80 @@ Luego edítelo y reemplace las contraseñas por sus propios valores. Variables:
 
 `DB_PASSWORD` debe coincidir con `MYSQL_FRANQUICIAS_APP_PASSWORD`; ambos deben setearse a la misma contraseña. El usuario `franquicias_app` se crea automáticamente la primera vez que se inicializa el contenedor. Nunca se use el usuario root desde la aplicación.
 
+> **Nota por modalidad:** en la **Opción A (Docker Compose)** solo hacen falta `MYSQL_ROOT_PASSWORD` y `MYSQL_FRANQUICIAS_APP_PASSWORD`, porque Compose configura directamente las variables `DB_*` del contenedor de la API (incluida la URL con host interno `mysql`). Las variables `DB_*` del `.env` se usan únicamente en la **Opción B (Maven local)**.
+
 El archivo `.env` está excluido en `.gitignore` y no debe commitearse. `.env.example` sí se sube al repositorio solo como referencia sin valores reales.
 
-## 5. Ejecución de MySQL con Docker Compose
+## 5. Ejecución de MySQL con Docker Compose (para la Opción B)
 
-Desde la raíz del proyecto:
+MySQL corre en Docker en todas las modalidades. Para iniciar **solo MySQL** (sin la API, que en la Opción B se ejecuta con Maven):
 
 ```powershell
-# iniciar el contenedor (lee el .env de la raíz automáticamente)
-docker compose up -d
+# iniciar solo el contenedor de MySQL (lee el .env de la raíz automáticamente)
+docker compose up -d mysql
 
 # verificar que el estado del contenedor sea "healthy"
 docker compose ps
 ```
 
-Para detener el contenedor conservando los datos:
+> Si ejecuta `docker compose up -d` **sin indicar el servicio**, Compose levantará también el servicio `api` (la API dentro de Docker, Opción A).
+
+Para detener los contenedores conservando los datos:
 
 ```powershell
 docker compose down
 ```
 
-Los datos se conservan en el volumen nombrado `mysql_data`, por lo que `docker compose down` NO borra la información. Solo si quiere eliminarla por completo (borra todos los datos):
+`docker compose down` detiene tanto MySQL como la API si está corriendo, pero **NO borra la información**: los datos se conservan en el volumen nombrado `mysql_data`. Solo si quiere eliminarla por completo (borra todos los datos):
 
 ```powershell
-docker compose down -v
+docker compose down -v   # ¡cuidado: borra todos los datos!
 ```
 
 ## 6. Ejecución de la aplicación
 
-Spring Boot **no lee el archivo `.env`** cuando se ejecuta con Maven. Antes de arrancar o ejecutar pruebas, cargue las variables en la sesión de PowerShell:
+### Opción A: TODO el stack con Docker Compose (API + MySQL) — recomendada
+
+Requiere únicamente **Git y Docker Desktop** (ver requisitos previos). Con el `.env` ya creado (paso 4), clona el proyecto, entra a su carpeta y construye e inicia ambos servicios:
+
+```powershell
+git clone <URL-DE-TU-REPOSITORIO-GITHUB>
+cd pruebaAccenture
+```
+
+```powershell
+docker compose up -d --build
+```
+
+Comprueba el estado: `api` y `mysql` deben estar `running` y `mysql` además `healthy`:
+
+```powershell
+docker compose ps
+```
+
+La API arranca **solo cuando MySQL ya está saludable** (dependencia `service_healthy`); no es necesario esperar manualmente. La API queda en `http://localhost:8080`. Dentro de la red de Docker, la API se conecta a MySQL usando el nombre del servicio como host (`r2dbc:mysql://mysql:3306/franquicias_db`), configurado automáticamente por Compose.
+
+Comandos útiles:
+
+```powershell
+# logs de la API (y de MySQL si hace falta)
+docker compose logs -f api
+docker compose logs mysql
+
+# detener todo conservando los datos
+docker compose down
+
+# reconstruir y reiniciar solo la API tras cambios de código
+docker compose up -d --build api
+```
+
+El volumen `mysql_data` conserva los datos entre reinicios; `docker compose down` NO los borra.
+
+**Acceso con Postman (y cualquier cliente HTTP):** una vez que `docker compose ps` muestre la API en ejecución, apunte sus peticiones a la base URL `http://localhost:8080` (puerto publicado por Compose). La API no exige autenticación ni cabeceras especiales más allá de `Content-Type: application/json` en los cuerpos. Use la tabla de endpoints (paso 7) y los ejemplos (paso 8) para armar las peticiones.
+
+### Opción B: ejecución local con Maven (desarrollo)
+
+Requiere **JDK 21** y Docker Desktop (MySQL en Docker; inícielo con `docker compose up -d mysql`, paso 5). Spring Boot **no lee el archivo `.env`** cuando se ejecuta con Maven. Antes de arrancar o ejecutar pruebas, cargue las variables en la sesión de PowerShell:
 
 ```powershell
 # cargar las variables del .env en la sesión de PowerShell actual
@@ -254,7 +314,7 @@ Respuesta (todos los productos y el nombre de la sucursal):
 
 ## 9. Pruebas
 
-Con las variables del `.env` **ya cargadas** en la sesión de PowerShell (paso 6) y MySQL levantado:
+Requieren JDK 21 (modalidad Opción B). Con las variables del `.env` **ya cargadas** en la sesión de PowerShell (bloque de carga de la Opción B) y MySQL levantado (`docker compose up -d mysql`):
 
 - **Unitarias** (no requieren MySQL ni variables de entorno):
   ```powershell
@@ -284,6 +344,8 @@ Organización por funcionalidad con separación de capas:
 - Aplicación usa **Spring Data R2DBC** con MySQL. La configuración se toma de las variables `DB_URL`, `DB_USERNAME` y `DB_PASSWORD` (ver variables de entorno en paso 4).
 - Puerto de la aplicación: **8080**. Puerto de MySQL: **3306** (publicado por Docker Compose desde el contenedor `franquicias-mysql`).
 - La persistencia de datos vive en el volumen Docker `mysql_data`; por eso los datos persisten entre reinicios del contenedor.
+- La imagen Docker de la API es multi-etapa (Maven+JDK21 para compilar, solo JRE en la imagen final), corre con un usuario no root y no contiene secretos: las credenciales se inyectan al arrancar por Compose desde el `.env`.
+- Las pruebas automatizadas se ejecutan fuera de Docker con `mvnw test` y `mvnw verify` (necesitan MySQL local alcanzable en `localhost:3306`).
 - Si MySQL no está saludable, ver los logs del contenedor con `docker compose logs mysql`.
 - Si la aplicación no arranca, revisar los logs de la sesión de ejecución (`spring-boot:run`). Errores comunes: variables de entorno del `.env` sin cargar, o contenedor MySQL no levantado.
 - La base de datos y las tablas se crean de forma idempotente al arranque (`schema.sql` con `CREATE TABLE IF NOT EXISTS`); no es necesario ejecutar scripts manualmente.
